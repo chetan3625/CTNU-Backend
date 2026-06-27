@@ -1,4 +1,8 @@
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
@@ -57,19 +61,24 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const DB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chetanu';
+const DB_URI = process.env.MONGODB_URI?.trim();
 
 const startServer = () => {
   server.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 };
 
-mongoose.connect(DB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => {
-    console.log('MongoDB connected');
-    startServer();
-  })
-  .catch(err => {
-    console.error('MongoDB connection error:', err.message);
-    console.warn('Starting server without database connection. Set MONGODB_URI in Render to enable DB-backed features.');
-    startServer();
-  });
+if (!DB_URI) {
+  console.warn('MongoDB URI is not set. Starting server without database connection. Set MONGODB_URI to enable DB-backed features.');
+  startServer();
+} else {
+  mongoose.connect(DB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => {
+      console.log('MongoDB connected');
+      startServer();
+    })
+    .catch(err => {
+      console.error('MongoDB connection error:', err.message);
+      console.warn('Starting server without database connection. Set MONGODB_URI to a real MongoDB URI to enable DB-backed features.');
+      startServer();
+    });
+}
