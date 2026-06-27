@@ -44,19 +44,35 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.user.id}`);
+  const userId = socket.user.id;
+  console.log(`User connected: ${userId}`);
+  
+  // Join a room unique to this user ID
+  socket.join(userId);
+
   socket.on('private_message', async ({ to, content }) => {
-    const Message = require('./models/Message');
-    const message = await Message.create({ from: socket.user.id, to, content, timestamp: new Date() });
-    // emit to recipient if online
-    for (let [id, s] of io.sockets.sockets) {
-      if (s.user && s.user.id === to) {
-        s.emit('private_message', message);
-        break;
-      }
+    try {
+      const Message = require('./models/Message');
+      const message = await Message.create({ 
+        from: userId, 
+        to, 
+        content, 
+        timestamp: new Date() 
+      });
+      
+      // Emit to recipient's room
+      io.to(to).emit('private_message', message);
+      
+      // Emit back to all of sender's sockets/sessions
+      io.to(userId).emit('private_message', message);
+    } catch (err) {
+      console.error('Error handling private message:', err);
+      socket.emit('error', { message: 'Failed to send message' });
     }
-    // also emit back to sender for UI update
-    socket.emit('private_message', message);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`User disconnected: ${userId}`);
   });
 });
 
