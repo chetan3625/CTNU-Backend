@@ -23,8 +23,23 @@ router.get('/recent', verifyToken, async (req, res) => {
     userIds.delete(userId); // remove current user
 
     const users = await User.find({ _id: { $in: Array.from(userIds) } })
-      .select('_id username email');
-    res.json(users);
+      .select('_id username email isOnline lastSeen');
+
+    const usersList = [];
+    for (const u of users) {
+      const unreadCount = await Message.countDocuments({
+        from: u._id,
+        to: userId,
+        read: false
+      });
+      usersList.push({
+        _id: u._id,
+        username: u.username,
+        email: u.email,
+        unreadCount
+      });
+    }
+    res.json(usersList);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
@@ -36,6 +51,12 @@ router.get('/history/:otherUserId', verifyToken, async (req, res) => {
   const userId = req.user.id;
   const otherUserId = req.params.otherUserId;
   try {
+    // Mark incoming messages as read
+    await Message.updateMany(
+      { from: otherUserId, to: userId, read: false },
+      { $set: { read: true } }
+    );
+
     const messages = await Message.find({
       $or: [
         { from: userId, to: otherUserId },
@@ -43,7 +64,7 @@ router.get('/history/:otherUserId', verifyToken, async (req, res) => {
       ]
     })
       .sort('timestamp')
-      .select('_id from to content timestamp');
+      .select('_id from to content timestamp read');
     res.json(messages);
   } catch (err) {
     console.error(err);
